@@ -1,0 +1,75 @@
+service: PedidoVenda
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: us-east-1
+  stage: dev  # Definindo explicitamente o stage
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "dynamodb:*"
+      Resource: "*"
+    - Effect: "Allow"
+      Action:
+        - "sqs:*"
+      Resource: "*"
+    - Effect: "Allow"
+      Action:
+        - "states:*"
+      Resource: "*"
+
+functions:
+  triggerPedidoVenda:
+    handler: lambdas/trigger_pedido_venda.main
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt: [SqsPedido, Arn]
+
+  processaPedido:
+    handler: lambdas/processa_pedido.main
+
+  notifica:
+    handler: lambdas/notifica.main
+
+resources:
+  Resources:
+    PedidoDB:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: PedidoDB
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+
+    SqsPedido:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: sqsPedido
+
+stepFunctions:
+  stateMachines:
+    pedidoStateMachine:
+      definition:
+        Comment: "A Step Function to process and notify about a sale order"
+        StartAt: ProcessaPedido
+        States:
+          ProcessaPedido:
+            Type: Task
+            Resource: arn:aws:lambda:${self:provider.region}:${aws:accountId}:function:${self:service}-${self:provider.stage}-processaPedido
+            Next: Notifica
+          Notifica:
+            Type: Task
+            Resource: arn:aws:lambda:${self:provider.region}:${aws:accountId}:function:${self:service}-${self:provider.stage}-notifica
+            End: true
+
+plugins:
+  - serverless-step-functions
+
