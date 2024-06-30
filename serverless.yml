@@ -65,6 +65,11 @@ stepFunctions:
             Type: Task
             Resource: arn:aws:lambda:${self:provider.region}:${aws:accountId}:function:${self:service}-${self:provider.stage}-processaPedido
             Next: Notifica
+            Retry: 
+              - ErrorEquals: ["States.TaskFailed"]
+                IntervalSeconds: 2
+                MaxAttempts: 10
+                BackoffRate: 2
           Notifica:
             Type: Task
             Resource: arn:aws:lambda:${self:provider.region}:${aws:accountId}:function:${self:service}-${self:provider.stage}-notifica
